@@ -1,0 +1,129 @@
+#!/usr/local/bin/php
+<?php
+
+/* ==========================================================================
+    Make sure dependencies are installed
+   ========================================================================== */
+$terminus = shell_exec('terminus --version');
+$composer = shell_exec('composer --version');
+$git = shell_exec('git --version');
+
+if (strpos($terminus, 'Terminus') === false) {
+  echo "\n\tThis script requires Terminus, please follow the installation instructions here: \033[32mhttps://pantheon.io/docs/terminus/install/\033[0m\n\n";
+  exit();
+}
+
+if (strpos($composer, 'Composer') === false) {
+  echo "\n\tThis script requires Composer, please follow the installation instructions here: \033[32mhttps://getcomposer.org/doc/00-intro.md\033[0m\n\n";
+  exit();
+}
+
+if (strpos($git, 'git') === false) {
+  echo "\n\tThis script requires git, please follow the installation instructions here: \033[32mhttps://git-scm.com/book/en/v1/Getting-Started-Installing-Git\033[0m\n\n";
+  exit();
+}
+
+/* ==========================================================================
+    Grab the site machine name and users current directory
+   ========================================================================== */
+$sitemachine = readline("\nThis script is gonna make you a d8 site on pantheon... What do you want the machine name to be? ");
+$dir = trim(shell_exec('pwd'));
+$continue = readline("\nArighty, we're gonna put your site here: \n\n\t\033[32m$dir/$sitemachine \033[0m\n\nis that cool? (yes/no) ");
+
+if ($continue !== 'yes') exit();
+
+/* ==========================================================================
+    Get the human name and organization
+   ========================================================================== */
+$sitename = readline("\nWhat is the human readable name for your site? (e.g. my-site -> My Site) ");
+$org = readline("\nProvide the organization you want to own this site, or hit enter to use a personal account: ");
+$site_email = readline("\nWhat would you like to use as the site email address? ");
+
+/* ==========================================================================
+    Create the site on pantheon
+   ========================================================================== */
+echo shell_exec("terminus site:create $sitemachine \"$sitename\" \"Drupal 8\" --org=\"$org\"");
+
+$success = shell_exec("terminus site:info $sitemachine");
+
+if (strpos($success, 'error') !== false) {
+  echo "\nLooks like there was an issue creating the site on pantheon. You're on your own, sorry :(\n\n";
+  exit();  
+}
+
+/* ==========================================================================
+    Create the project locally
+   ========================================================================== */
+echo shell_exec("composer create-project pantheon-systems/example-drops-8-composer $sitemachine");
+
+chdir($sitemachine);
+
+if (getcwd() !== "$dir/$sitemachine") {
+  var_dump(getcwd());
+  var_dump("$dir/$sitemachine");
+
+  echo "\nLooks like there was an issue creating the project locally... You're on your own, sorry :(\n\n";
+  exit();
+}
+
+/* ==========================================================================
+    Temporarily disable exclusions
+   ========================================================================== */
+$composer = json_decode(file_get_contents('composer.json'));
+$excludes = $composer->extra->{'drupal-scaffold'}->excludes;
+
+$composer->extra->{'drupal-scaffold'}->excludes = [];
+
+file_put_contents('composer.json', json_encode($composer, JSON_PRETTY_PRINT));
+
+shell_exec("composer install --no-dev -n -o");
+
+$composer->extra->{'drupal-scaffold'}->excludes = $excludes;
+$composer->{'minimum-stability'} = "dev";
+
+$json_indented_by_4 = json_encode($composer, JSON_UNESCAPED_SLASHES|JSON_PRETTY_PRINT);
+$composer = preg_replace('/^(  +?)\\1(?=[^ ])/m', '$1', $json_indented_by_4);
+
+file_put_contents('composer.json', $composer);
+
+/* ==========================================================================
+    Prepare for pantheon and push 'er up.
+   ========================================================================== */
+shell_exec('composer prepare-for-pantheon');
+
+shell_exec('git init');
+shell_exec('git add -A');
+shell_exec('git commit -m "Initial commit based on Drops 8, prepped for Pantheon."');
+
+shell_exec("terminus connection:set $sitemachine.dev git");
+
+$repo = trim(shell_exec("terminus connection:info $sitemachine.dev --field=git_url"));
+echo shell_exec("git remote add origin $repo");
+
+echo "\nOkay, time to force push to pantheon. Here is the connection info we're going to use:\n\n";
+echo shell_exec("terminus site:info la-meme-gen --field=Label");
+echo "$sitemachine\n";
+echo shell_exec("terminus connection:info $sitemachine.dev");
+echo "\nAnd here's where we're gonna force push: \n\n\t";
+echo shell_exec("git remote get-url origin");
+
+$keep_goin = readline("\nIf everything looks good we'll continue with the force push. Does everything look good? (yes/no) ");
+
+if ($keep_goin !== 'yes') {
+  echo "\nDamn, so close. Guess you're on your own. Sorry!\n\n";
+  exit();
+}
+
+echo shell_exec("git push --force origin master");
+
+// Wait for pantheon to finish deploying.
+sleep(120);
+
+echo shell_exec("terminus drush $sitemachine.dev -- site-install --site-name=\"$sitename\" --site-mail=\"$site_email\" -y");
+
+echo shell_exec("composer update drupal/core --no-dev -o");
+echo shell_exec("git add -A");
+echo shell_exec("git push");
+echo shell_exec("terminus drush $sitemachine.dev -- updb -y");
+
+echo "\n\nThat's it! We're done! Huzzah 🍻\n\n";
