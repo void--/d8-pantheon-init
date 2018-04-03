@@ -101,7 +101,7 @@ $repo = trim(shell_exec("terminus connection:info $sitemachine.dev --field=git_u
 echo shell_exec("git remote add origin $repo");
 
 echo "\nOkay, time to force push to pantheon. Here is the connection info we're going to use:\n\n";
-echo shell_exec("terminus site:info la-meme-gen --field=Label");
+echo shell_exec("terminus site:info $sitemachine.dev --field=Label");
 echo "$sitemachine\n";
 echo shell_exec("terminus connection:info $sitemachine.dev");
 echo "\nAnd here's where we're gonna force push: \n\n\t";
