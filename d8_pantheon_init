@@ -44,7 +44,7 @@ $site_email = readline("\nWhat would you like to use as the site email address? 
    ========================================================================== */
 echo shell_exec("terminus site:create $sitemachine \"$sitename\" \"Drupal 8\" --org=\"$org\"");
 
-$success = shell_exec("terminus site:info $sitemachine");
+$success = shell_exec("terminus site:info $sitemachine 2>&1");
 
 if (strpos($success, 'error') !== false) {
   echo "\nLooks like there was an issue creating the site on pantheon. You're on your own, sorry :(\n\n";
