@@ -38,17 +38,18 @@ if ($continue !== 'yes') exit();
 $sitename = readline("\nWhat is the human readable name for your site? (e.g. my-site -> My Site) ");
 $org = readline("\nProvide the organization you want to own this site, or hit enter to use a personal account: ");
 $site_email = readline("\nWhat would you like to use as the site email address? ");
+$orgoption = ($org == '.') ? "--org=\"$org\"" : '';
 
 /* ==========================================================================
     Create the site on pantheon
    ========================================================================== */
-echo shell_exec("terminus site:create $sitemachine \"$sitename\" \"Drupal 8\" --org=\"$org\"");
+echo shell_exec("terminus site:create $sitemachine \"$sitename\" \"Drupal 8\" $orgoption");
 
 $success = shell_exec("terminus site:info $sitemachine 2>&1");
 
 if (strpos($success, 'error') !== false) {
   echo "\nLooks like there was an issue creating the site on pantheon. You're on your own, sorry :(\n\n";
-  exit();  
+  exit();
 }
 
 /* ==========================================================================
